@@ -1,0 +1,13 @@
+[tool.setuptools.packages.find]
+where = "src"
+
+[tool.pytest.ini_options]
+addopts = "--cov-report term-missing --cov-branch --cov-report xml --cov-report term --cov=solarroi -vv --strict-markers -rfE"
+minversion = "6.0"
+pythonpath = "src"
+testpaths = [
+    "tests"
+]
+
+[tool.coverage.run]
+relative_files = true
