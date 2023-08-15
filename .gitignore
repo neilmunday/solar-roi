@@ -129,4 +129,4 @@ cython_debug/
 .vscode/
 
 # Solar ROI
-etc/solar-roi.conf
+etc/solar-roi.local.conf
