@@ -43,7 +43,7 @@ from solarroi import (  # noqa
 setuptools.setup(
     author="Neil Munday",
     data_files=[
-        ("etc", ["solar-roi.conf"])
+        ("etc", ["etc/solar-roi.conf"])
     ],
     description=DESCRIPTION,
     entry_points={
