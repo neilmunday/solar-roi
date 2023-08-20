@@ -8,6 +8,7 @@ The `solar-roi.py` script that this project provides the ability to save histori
 
 ## Requirements
 
+* requests
 * PyMySQL
 * SQLAlchemy
 
