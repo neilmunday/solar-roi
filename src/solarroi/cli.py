@@ -2,12 +2,13 @@ import argparse
 import datetime
 import logging
 import pathlib
+import re
 
 import solarroi
 import solarroi.givenergy as givenergy
 import solarroi.octopusenergy as octopus_energy
 
-from solarroi.common import check_file
+from solarroi.common import check_file, die
 from solarroi.sql import connect_db, SolarROI
 
 
@@ -26,7 +27,8 @@ def main():
         dest="use_database", action="store_true"
     )
     parser.add_argument(
-        "-s", "--start", help="Date to get consumption data from",
+        "-s", "--start", help="Date to get consumption data from. Use now-X " +
+                              "to specify a date X days ago.",
         dest="start_date", required=True
     )
     parser.add_argument(
@@ -50,7 +52,22 @@ def main():
         check_file(config_path)
         solarroi.conf_file = config_path
 
-    today = str(datetime.datetime.now().date())
+    today = datetime.datetime.now().date()
+    today_str = str(today)
+
+    # Check start date argument
+    now_re = re.compile(r"^now-(?P<days>[0-9])+$")
+    date_re = re.compile(r"^2[0-9]{3}-[0|1|2][0-9]-[0|1|2|3][0-9]+$")
+
+    start_date = args.start_date
+
+    now_match = now_re.match(start_date)
+    if now_match:
+        minus_days = int(now_match.group("days"))
+        start_date = str(today - datetime.timedelta(days=minus_days))
+    else:
+        if not date_re.match(start_date):
+            die(f"Invalid start date: {args.start_date}")
 
     results = {}
     roi = 0
@@ -58,8 +75,8 @@ def main():
     logging.debug("Querying GivEnergy API")
 
     giv_energy_use = givenergy.get_energy_consumption_by_day(
-        args.start_date,
-        today
+        start_date,
+        today_str
     )
 
     for date, result in giv_energy_use.items():
@@ -74,8 +91,8 @@ def main():
     logging.debug("Querying Octopus Energy API")
 
     octopus_energy_use = octopus_energy.get_import_energy_use_by_day(
-        args.start_date,
-        today
+        start_date,
+        today_str
     )
 
     for date, value in octopus_energy_use.items():
@@ -90,8 +107,8 @@ def main():
             roi += results[date]["roi"]
 
     octopus_energy_export = octopus_energy.get_export_energy_generated_by_day(
-        args.start_date,
-        today
+        start_date,
+        today_str
     )
 
     for date, value in octopus_energy_export.items():

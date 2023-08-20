@@ -34,10 +34,18 @@ If you want to save records to a MySQL database, then you will also need an oper
 
 ## Execution
 
+Using a specific start date:
+
 ```bash
 solar-roi.py -c path/to/solar-roi.conf --start 2023-08-01
 ```
 
-The `--start` option specifies the date to process energy records from.
+Using a relative start date (today minus 3 days):
+
+```bash
+solar-roi.py -c path/to/solar-roi.conf --start now-3
+```
+
+The `--start` option specifies the date to process energy records from. You can use a specific date or a relative date by specifying the string `now-X` where `X` is the number of days to substract from the current date.
 
 To save the records to MySQL, add the `--use-database` option to the command above.
