@@ -13,7 +13,8 @@ from solarroi.sql import connect_db, SolarROI
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Calculate ROI for your PV system using GivEnergy and Octopus Energy APIs",
+        description="Calculate ROI for your PV system using GivEnergy " +
+                    "and Octopus Energy APIs",
         add_help=True
     )
     parser.add_argument(
@@ -114,7 +115,22 @@ def main():
         session_maker = connect_db()
         with session_maker() as session:
             for date, record in results.items():
-                solar_roi = session.query(SolarROI).filter(SolarROI.date == date).first()
+                fields_missing = []
+                for field in ["cost", "grid_export", "grid_import",
+                              "home_consumption", "income", "no_pv_cost",
+                              "roi"]:
+                    if field not in record:
+                        fields_missing.append(field)
+
+                if len(fields_missing) > 0:
+                    logging.warning("Missing fields: %s", ",".join(
+                        fields_missing
+                    ))
+                    continue
+
+                solar_roi = session.query(SolarROI).filter(
+                    SolarROI.date == date
+                ).first()
                 if solar_roi:
                     logging.debug("Updating existing record for %s", date)
                     solar_roi.cost = record["cost"]
