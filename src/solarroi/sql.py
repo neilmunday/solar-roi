@@ -18,7 +18,7 @@ def connect_db() -> sessionmaker:
     host = get_config_opion(CONFIG_SECTION, "host")
 
     conn_str = f"mysql+pymysql://{user}:{password}@{host}/{db}"
-    logging.debug("pes.sql.connect: connecting to: %s", conn_str)
+    logging.debug("connect_db: connecting to: %s", conn_str)
     engine = create_engine(conn_str)
     Session = sessionmaker(bind=engine)
     Base.metadata.create_all(engine)
