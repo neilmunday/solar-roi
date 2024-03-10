@@ -28,7 +28,7 @@ Download the latest release of this project or use `git clone https://github.com
 
 Solar-ROI requires a configuration file, `solar-roi.conf`. An example is provided in the `etc` directory of this project.
 
-You will need your GivEnergy API key and for Octopus Energy, you will require your API key, account number, electricity meter serial numbers and MPANs, and your electricity tariff and product codes.
+You will need your GivEnergy API key and for Octopus Energy, you will require your API key and account number.
 
 If you want to save records to a MySQL database, then you will also need an operational MySQL server with a database and user for Solar-ROI to use.
 
@@ -38,6 +38,12 @@ Using a specific start date:
 
 ```bash
 solar-roi.py -c path/to/solar-roi.conf --start 2023-08-01
+```
+
+Use a date range:
+
+```bash
+solar-roi.py -c path/to/solar-roi.conf --start 2023-08-01 --end 2023-09-01
 ```
 
 Using a relative start date (today minus 3 days):
