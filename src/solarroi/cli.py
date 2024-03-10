@@ -32,6 +32,10 @@ def main():
         dest="start_date", required=True
     )
     parser.add_argument(
+        "-e", "--end", help="End date to get consumption data up to.",
+        dest="end_date", required=False
+    )
+    parser.add_argument(
         "-v", "--verbose", help="Turn on debug messages", dest="verbose",
         action="store_true"
     )
@@ -52,12 +56,20 @@ def main():
         check_file(config_path)
         solarroi.conf_file = config_path
 
-    today = datetime.datetime.now().date()
-    today_str = str(today)
+    date_re = re.compile(r"^2[0-9]{3}-[0|1|2][0-9]-[0|1|2|3][0-9]+$")
+
+    end_date = None
+
+    if args.end_date is not None:
+        if not date_re.match(args.end_date):
+            die(f"Invalid end date: {args.end_date}")
+        end_date = args.end_date
+    else:
+        today = datetime.datetime.now().date()
+        end_date = str(today)
 
     # Check start date argument
-    now_re = re.compile(r"^now-(?P<days>[0-9])+$")
-    date_re = re.compile(r"^2[0-9]{3}-[0|1|2][0-9]-[0|1|2|3][0-9]+$")
+    now_re = re.compile(r"^now-(?P<days>[0-9]+)$")
 
     start_date = args.start_date
 
@@ -69,56 +81,65 @@ def main():
         if not date_re.match(start_date):
             die(f"Invalid start date: {args.start_date}")
 
+    if end_date < start_date:
+        die("End date is before start date")
+
     results = {}
     roi = 0
 
     logging.debug("Querying GivEnergy API")
+    logging.debug("Querying Octopus Energy API")
+
+    import_meter, export_meter = octopus_energy.get_tariff_history()
+
+    octopus_energy_import_cost = octopus_energy.get_energy_cost_by_day(
+        import_meter,
+        start_date,
+        end_date
+    )
+
+    octopus_energy_export_cost = octopus_energy.get_energy_cost_by_day(
+        export_meter,
+        start_date,
+        end_date
+    )
 
     giv_energy_use = givenergy.get_energy_consumption_by_day(
         start_date,
-        today_str
+        end_date
     )
 
     for date, result in giv_energy_use.items():
-        no_pv_cost = round(
-            octopus_energy.get_import_tariff_cost(date) * result["home_consumption"], 2
-        )
-        results[date] = {
-            "home_consumption": result["home_consumption"],
-            "no_pv_cost": no_pv_cost
-        }
+        results[date] = {}
+        results[date]["grid_export"] = 0
+        results[date]["grid_import"] = 0
 
-    logging.debug("Querying Octopus Energy API")
-
-    octopus_energy_use = octopus_energy.get_import_energy_use_by_day(
-        start_date,
-        today_str
-    )
-
-    for date, value in octopus_energy_use.items():
-        if date in results:
-            results[date]["grid_import"] = value
-            results[date]["cost"] = round(
-                value * octopus_energy.get_import_tariff_cost(date), 2
+        if date in octopus_energy_import_cost["consumption"]:
+            no_pv_cost = round(
+                octopus_energy_import_cost["prices"][date] * result["home_consumption"], 2
             )
-            results[date]["grid_export"] = 0
+            results[date] = {
+                "home_consumption": result["home_consumption"],
+                "no_pv_cost": no_pv_cost,
+                "cost": octopus_energy_import_cost["expenditure"][date],
+                "grid_import": octopus_energy_import_cost["consumption"][date]
+            }
+        else:
+            continue
+
+        if date in octopus_energy_export_cost["generation"]:
+            results[date]["income"] = octopus_energy_export_cost["income"][date]
+            results[date]["grid_export"] = octopus_energy_export_cost["generation"][date]
+        else:
             results[date]["income"] = 0
-            results[date]["roi"] = results[date]["no_pv_cost"] - results[date]["cost"]
-            roi += results[date]["roi"]
+            results[date]["grid_export"] = 0
+            results[date]["roi"] = 0
 
-    octopus_energy_export = octopus_energy.get_export_energy_generated_by_day(
-        start_date,
-        today_str
-    )
+        if results[date]["no_pv_cost"] < results[date]["cost"]:
+            results[date]["no_pv_cost"] = results[date]["cost"]
 
-    for date, value in octopus_energy_export.items():
-        if date in results:
-            results[date]["grid_export"] = value
-            results[date]["income"] = round(
-                value * octopus_energy.get_export_tariff_cost(date), 2
-            )
-            results[date]["roi"] += results[date]["income"]
-            roi += results[date]["income"]
+        results[date]["roi"] = (results[date]["no_pv_cost"] - results[date]["cost"]) + results[date]["income"]
+        roi += results[date]["roi"]
 
     logging.debug(results)
     days = len(results)
@@ -140,7 +161,7 @@ def main():
                         fields_missing.append(field)
 
                 if len(fields_missing) > 0:
-                    logging.warning("Missing fields: %s", ",".join(
+                    logging.warning("%s: Missing fields: %s", date, ",".join(
                         fields_missing
                     ))
                     continue

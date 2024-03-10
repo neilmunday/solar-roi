@@ -1,13 +1,29 @@
+import datetime
 import logging
 import requests
 
-from typing import Dict
+from typing import Any, Dict, Optional
 from solarroi.common import get_config_opion
 
 BASE_URL = "https://api.octopus.energy/v1"
 CONFIG_SECTION = "OctopusEnergy"
 
 __url_cache = {}
+
+
+class Meter:
+
+    def __init__(
+        self, is_export: bool, mpan: str, serial: str, agrements: Any
+    ):
+        self.is_export = is_export
+        self.mpan = mpan
+        self.serial = serial
+        self.agreements = agrements
+
+    def __repr__(self):
+        return f"<mpan: {self.mpan}, serial: {self.serial}, export: {self.is_export}, agreements: {self.agreements} >"
+
 
 def get_account() -> str:
     return get_config_opion(CONFIG_SECTION, "account")
@@ -17,64 +33,57 @@ def get_api_key() -> str:
     return get_config_opion(CONFIG_SECTION, "api_key")
 
 
-def get_export_meter_mpan() -> str:
-    return get_config_opion(CONFIG_SECTION, "export_meter_mpan")
+def get_tariff_history() -> tuple[Meter, Meter]:
+    url = f"{BASE_URL}/accounts/{get_account()}/"
+    response = load_url(url)
+    import_meter = None
+    export_meter = None
+    for meter_point in response["properties"][0]["electricity_meter_points"]:
+        if meter_point["is_export"]:
+            export_meter = Meter(
+                True,
+                meter_point["mpan"],
+                meter_point["meters"][0]["serial_number"],
+                meter_point["agreements"]
+            )
+        else:
+            import_meter = Meter(
+                False,
+                meter_point["mpan"],
+                meter_point["meters"][0]["serial_number"],
+                meter_point["agreements"]
+            )
+    return (import_meter, export_meter)
 
 
-def get_export_meter_serial() -> str:
-    return get_config_opion(CONFIG_SECTION, "export_meter_serial")
+def load_url(url: str, params: Optional[Dict] = None) -> Any:
+    logging.debug("load_url: %s", url)
+    response = requests.request(
+        "GET", url, auth=(get_api_key(), ""), params=params
+    )
+    return response.json()
 
 
-def get_export_product_code() -> str:
-    return get_config_opion(CONFIG_SECTION, "export_product_code")
+def get_energy_cost_by_day(
+    meter: Meter, start_date_str: str, end_date_str: str
+) -> Dict:
+    start_date = datetime.date.fromisoformat(start_date_str)
+    end_date = datetime.date.fromisoformat(end_date_str)
 
+    logging.debug("get_energy_cost_by_day: %s to %s", start_date, end_date)
 
-def get_export_tariff_code() -> str:
-    return get_config_opion(CONFIG_SECTION, "export_tariff_code")
+    costs = {}
+    consumption = {}
+    prices = {}
 
-
-def get_import_meter_mpan() -> str:
-    return get_config_opion(CONFIG_SECTION, "import_meter_mpan")
-
-
-def get_import_meter_serial() -> str:
-    return get_config_opion(CONFIG_SECTION, "import_meter_serial")
-
-
-def get_import_tariff_code() -> str:
-    return get_config_opion(CONFIG_SECTION, "import_tariff_code")
-
-
-def get_import_product_code() -> str:
-    return get_config_opion(CONFIG_SECTION, "import_product_code")
-
-
-def get_export_energy_generated_by_day(
-    start_date: str, end_date: str
-) -> Dict[str, float]:
-    return get_energy_consumption_by_day(
-        start_date, end_date, get_export_meter_mpan(), get_export_meter_serial()
+    logging.debug(
+        "get_energy_cost_by_day: meter (%s, %s, %s)",
+        meter.mpan,
+        meter.serial,
+        meter.is_export
     )
 
-
-def get_import_energy_use_by_day(
-    start_date: str, end_date: str
-) -> Dict[str, float]:
-    return get_energy_consumption_by_day(
-        start_date, end_date, get_import_meter_mpan(), get_import_meter_serial()
-    )
-
-
-def get_energy_consumption_by_day(
-    start_date: str,
-    end_date: str,
-    mpan: str,
-    serial: str
-) -> Dict[str, float]:
-    api_key = get_api_key()
-
-    url = f"{BASE_URL}/electricity-meter-points/{mpan}/meters/{serial}/consumption/"
-
+    url = f"{BASE_URL}/electricity-meter-points/{meter.mpan}/meters/{meter.serial}/consumption/"
     params = {
         "period_from": f"{start_date}T00:00:00Z",
         "period_to": f"{end_date}T00:00:00Z",
@@ -82,48 +91,88 @@ def get_energy_consumption_by_day(
         "order_by": "period"
     }
 
-    response = requests.request("GET", url, auth=(api_key, ""), params=params)
-    data = response.json()
+    while True:
+        consumption_data = load_url(
+            url,
+            params       
+        )
+        params = None
 
-    results = {}
+        for data_point in consumption_data["results"]:
+            date = data_point["interval_start"][0:10]
+            consumption[date] = data_point["consumption"]
 
-    for data_point in data["results"]:
-        date = data_point["interval_start"][0:10]
-        results[date] = data_point["consumption"]
+        if "next" in consumption_data and consumption_data["next"] is not None:
+            url = consumption_data["next"]
+        else:
+            logging.debug("get_energy_cost_by_day: end of data points")
+            break
 
-    return results
+    current_date = start_date
+    while current_date <= end_date:
+        logging.debug("get_energy_cost_by_day: day = %s", current_date)
+        next_date = current_date + datetime.timedelta(days=1)
+        current_date_iso = current_date.isoformat()
+        next_date_iso = next_date.isoformat()
+        tariff_code = None
+        # get tariff for this day
+        for agreement in meter.agreements:
+            if current_date_iso >= agreement["valid_from"] and current_date_iso < agreement["valid_to"]:
+                tariff_code = agreement["tariff_code"]
+                parts = tariff_code.split("-")
+                product_code = "-".join(parts[2:-1])
+                logging.debug(
+                    "get_energy_cost_by_day: %s = %s, %s",
+                    current_date,
+                    product_code,
+                    tariff_code
+                )
+                break
 
+        if tariff_code is None:
+            logging.warning("Could not determine tariff code for %s for meter %s", current_date_iso, meter.mpan)
+            costs[current_date_iso] = 0
+            prices[current_date_iso] = 0
+        else:
+            # get prices for the day
+            prices_for_day = load_url(
+                f"{BASE_URL}/products/{product_code}/electricity-tariffs/{tariff_code}/standard-unit-rates/",
+                {
+                    "period_from": current_date_iso,
+                    "period_to": next_date_iso
+                }
+            )
 
-def get_export_tariff_cost(date: str) -> float:
-    export_product_code = get_export_product_code()
-    export_tariff_code = get_export_tariff_code()
-    return get_tariff_cost(date, export_tariff_code, export_product_code)
-
-
-def get_import_tariff_cost(date: str) -> float:
-    import_product_code = get_import_product_code()
-    import_tariff_code = get_import_tariff_code()
-    return get_tariff_cost(date, import_tariff_code, import_product_code)
-
-
-def get_tariff_cost(
-    date: str, tariff_code: str, product_code: str
-) -> float:
-    date = f"{date}T00:00:00Z"
-    url = f"{BASE_URL}/products/{product_code}/electricity-tariffs/{tariff_code}/standard-unit-rates/"
-
-    if url not in __url_cache:
-        response = requests.request("GET", url)
-        __url_cache[url] = response.json()
-    else:
-        logging.debug("get_tariff_cost: using cache for %s", url)
-
-    data = __url_cache[url]
-
-    for data_point in data["results"]:
-        if data_point["payment_method"] is None or data_point["payment_method"] == "DIRECT_DEBIT":
-            if date > data_point["valid_from"] and (data_point["valid_to"] is None or date < data_point["valid_to"]):
+            if prices_for_day["count"] == 1:
                 # convert from pence to pounds
-                return float(data_point["value_inc_vat"]) / 100
-    logging.error("Could not find unit cost for %s", url)
-    return 0
+                prices[current_date_iso] = float(prices_for_day["results"][0]["value_inc_vat"]) / 100
+            elif prices_for_day["count"] > 1:
+                # find DD value
+                for result in prices_for_day["results"]:
+                    if result["payment_method"] == "DIRECT_DEBIT":
+                        # convert from pence to pounds
+                        prices[current_date_iso] = float(result["value_inc_vat"]) / 100
+            else:
+                raise Exception(f"Could not deterimine prices for {current_date_iso}")
+
+            if current_date_iso in consumption:
+                costs[current_date_iso] = round(prices[current_date_iso] * consumption[current_date_iso], 2)
+
+        current_date += datetime.timedelta(days=1)
+
+    if meter.is_export:
+        result = {
+            "prices": prices,
+            "generation": consumption,
+            "income": costs
+        }
+    else:
+        result = {
+            "prices": prices,
+            "consumption": consumption,
+            "expenditure": costs
+        }
+
+    logging.debug("get_energy_cost_by_day: returning %s", result)
+
+    return result
