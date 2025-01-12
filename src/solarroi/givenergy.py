@@ -79,6 +79,9 @@ def get_energy_consumption_by_day(start_date: str, end_date: str):
 
     results = {}
 
+    if "message" in data and "Unauthenticated" in data["message"]:
+        raise RuntimeError("Unable to access GivEnergy API: Unauthenticated")
+
     for data_point in data["data"].values():
         date = data_point["start_time"][0:10]
         # sum up energy usage
