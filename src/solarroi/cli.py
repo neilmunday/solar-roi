@@ -115,12 +115,18 @@ def main():
         results[date]["grid_import"] = 0
 
         if date in octopus_energy_import_cost["consumption"]:
-            no_pv_cost = round(
-                octopus_energy_import_cost["prices"][date] * result["home_consumption"], 2
-            )
+            # work out no PV cost
+            no_pv_cost = 0.0
+            for consumption_period in result["consumption_periods"]:
+                # find price for this time
+                for tariff_price in octopus_energy_import_cost["prices"][date]:
+                    if tariff_price.is_active(consumption_period.valid_from):
+                        no_pv_cost += tariff_price.price * consumption_period.consumption
+                        break
+
             results[date] = {
-                "home_consumption": result["home_consumption"],
-                "no_pv_cost": no_pv_cost,
+                "home_consumption": result["total_home_consumption"],
+                "no_pv_cost": round(no_pv_cost, 2),
                 "cost": octopus_energy_import_cost["expenditure"][date],
                 "grid_import": octopus_energy_import_cost["consumption"][date]
             }
@@ -134,9 +140,6 @@ def main():
             results[date]["income"] = 0
             results[date]["grid_export"] = 0
             results[date]["roi"] = 0
-
-        if results[date]["no_pv_cost"] < results[date]["cost"]:
-            results[date]["no_pv_cost"] = results[date]["cost"]
 
         results[date]["roi"] = (results[date]["no_pv_cost"] - results[date]["cost"]) + results[date]["income"]
         roi += results[date]["roi"]
@@ -192,4 +195,4 @@ def main():
                     )
                 session.add(solar_roi)
                 session.commit()
-        logging.debug("Database update complete")    
+        logging.debug("Database update complete")

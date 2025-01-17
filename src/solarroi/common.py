@@ -1,4 +1,5 @@
 import configparser
+import datetime
 import logging
 import pathlib
 import sys
@@ -34,3 +35,26 @@ def get_config_opion(section_name: str, option_name: str) -> str:
         die(f"Section {section_name} has no option {option_name}")
 
     return parser.get(section_name, option_name)
+
+
+def get_datetime_from_date(d: datetime.date, endOfDay: bool = False) -> datetime.datetime:
+    if not endOfDay:
+        return datetime.datetime(
+            year=d.year,
+            month=d.month,
+            day=d.day,
+            hour=0,
+            minute=0,
+            second=0,
+            tzinfo=datetime.timezone.utc
+        )
+
+    return datetime.datetime(
+        year=d.year,
+        month=d.month,
+        day=d.day,
+        hour=23,
+        minute=59,
+        second=59,
+        tzinfo=datetime.timezone.utc
+    )

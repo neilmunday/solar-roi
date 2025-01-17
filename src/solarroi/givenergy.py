@@ -1,8 +1,9 @@
+import datetime
 import logging
 import requests
 
 from enum import Enum
-from typing import Dict
+from typing import Any, Dict
 
 from solarroi.common import get_config_opion, die
 
@@ -11,6 +12,17 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 BASE_URL = "https://api.givenergy.cloud/v1"
 CONFIG_SECTION = "GivEnergy"
+
+
+class ConsumptionPeriod:
+
+    def __init__(self, valid_from: datetime.datetime, valid_to: datetime.datetime, consumption: float):
+        self.valid_from = valid_from.astimezone(datetime.timezone.utc)
+        self.valid_to = valid_to.astimezone(datetime.timezone.utc)
+        self.consumption = consumption
+
+    def __repr__(self) -> str:
+        return f"<valid_from {self.valid_from.isoformat()}, valid_to: {self.valid_to.isoformat()}, consumption: {self.consumption}>"
 
 
 class GroupingType(Enum):
@@ -68,7 +80,7 @@ def get_energy_consumption_by_day(start_date: str, end_date: str):
     params = {
         "start_time": start_date,
         "end_time": end_date,
-        "grouping": GroupingType.DAILY.value,
+        "grouping": GroupingType.HALF_HOUR.value,
         "types": types_array
     }
 
@@ -77,7 +89,7 @@ def get_energy_consumption_by_day(start_date: str, end_date: str):
 
     check_response(data)
 
-    results = {}
+    results: Dict[str, Any] = {}
 
     if "message" in data and "Unauthenticated" in data["message"]:
         raise RuntimeError("Unable to access GivEnergy API: Unauthenticated")
@@ -94,10 +106,29 @@ def get_energy_consumption_by_day(start_date: str, end_date: str):
             if int(key) in home_consumption_types:
                 home_consumption += value
 
-        results[date] = {
-            "grid_import": grid_import,
-            "home_consumption": home_consumption
-        }
+        if date not in results:
+            results[date] = {
+                "total_grid_import": grid_import,
+                "total_home_consumption": home_consumption,
+                "consumption_periods": [ConsumptionPeriod(
+                    datetime.datetime.fromisoformat(data_point["start_time"]),
+                    datetime.datetime.fromisoformat(data_point["end_time"]),
+                    home_consumption
+                )]
+            }
+        else:
+            results[date]["total_grid_import"] += grid_import
+            results[date]["total_home_consumption"] += home_consumption
+            results[date]["consumption_periods"].append(
+                ConsumptionPeriod(
+                    datetime.datetime.fromisoformat(data_point["start_time"]),
+                    datetime.datetime.fromisoformat(data_point["end_time"]),
+                    home_consumption
+                )
+            )
+
+        results[date]["total_grid_import"] = round(results[date]["total_grid_import"], 2)
+        results[date]["total_home_consumption"] = round(results[date]["total_home_consumption"], 2)
 
     return results
 
