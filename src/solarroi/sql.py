@@ -1,8 +1,8 @@
 import logging
 
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import create_engine, Column, Date, Double
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base  # type: ignore
+from sqlalchemy import create_engine, Column, Date, Double  # type: ignore
+from sqlalchemy.orm import sessionmaker  # type: ignore
 
 from solarroi.common import get_config_opion
 
@@ -25,7 +25,7 @@ def connect_db() -> sessionmaker:
     return Session
 
 
-class SolarROI(Base):
+class SolarROI(Base):  # type: ignore
 
     __tablename__ = "roi"
 
