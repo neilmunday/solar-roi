@@ -22,7 +22,8 @@ class ConsumptionPeriod:
         self.consumption = consumption
 
     def __repr__(self) -> str:
-        return f"<valid_from {self.valid_from.isoformat()}, valid_to: {self.valid_to.isoformat()}, consumption: {self.consumption}>"
+        return f"<valid_from {self.valid_from.isoformat()}, " + \
+            f"valid_to: {self.valid_to.isoformat()}, consumption: {self.consumption}>"
 
 
 class GroupingType(Enum):
