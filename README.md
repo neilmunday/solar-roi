@@ -4,6 +4,8 @@ This project aims to calculate the Return On Investment (ROI) for a Solar panel 
 
 It makes use of the GivEnergy and Octopus Energy APIs to correlate usage and the expenditure and income.
 
+In addition the script can optionally download solar forecast data for your location as well using the [Solcast API](https://solcast.com/) when using a "hobbyist" account.
+
 The `solar-roi.py` script that this project provides the ability to save historical records to a MySQL database. This then means that you can graph the records using Grafana for example.
 
 ## Requirements
@@ -51,6 +53,8 @@ Using a relative start date (today minus 3 days):
 ```bash
 solar-roi.py -c path/to/solar-roi.conf --start now-3
 ```
+
+Use the `--forecast` option to download solar forecast data (optional).
 
 The `--start` option specifies the date to process energy records from. You can use a specific date or a relative date by specifying the string `now-X` where `X` is the number of days to substract from the current date.
 

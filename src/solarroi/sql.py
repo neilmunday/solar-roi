@@ -1,7 +1,7 @@
 import logging
 
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore
-from sqlalchemy import create_engine, Column, Date, Double  # type: ignore
+from sqlalchemy import create_engine, Column, Date, DateTime, Double  # type: ignore
 from sqlalchemy.orm import sessionmaker  # type: ignore
 
 from solarroi.common import get_config_opion
@@ -37,3 +37,11 @@ class SolarROI(Base):  # type: ignore
     income = Column(Double)
     no_pv_cost = Column(Double)
     roi = Column(Double)
+
+
+class Solcast(Base):  # type: ignore
+
+    __tablename__ = "solcast"
+
+    date = Column(DateTime, primary_key=True)
+    pv_estimate = Column(Double)
