@@ -2,8 +2,8 @@ import argparse
 import datetime
 import logging
 import pathlib
+import pprint
 import re
-import sys
 
 import solarroi
 import solarroi.givenergy as givenergy
@@ -14,7 +14,77 @@ from solarroi.common import check_file, die
 from solarroi.sql import connect_db, Solcast, SolarROI
 
 
-def main():
+def solar_forecast_main():
+    parser = argparse.ArgumentParser(
+        description="Fetch solar forecast from Solcast",
+        add_help=True
+    )
+    parser.add_argument(
+        "-c", "--config", help="Path to config file",
+        dest="config_path"
+    )
+    parser.add_argument(
+        "-d", "--use-database", help="Save records to database",
+        dest="use_database", action="store_true"
+    )
+    parser.add_argument(
+        "-v", "--verbose", help="Turn on debug messages", dest="verbose",
+        action="store_true"
+    )
+
+    args = parser.parse_args()
+
+    log_date = "%Y/%m/%d %H:%M:%S"
+    log_format = "%(asctime)s:%(levelname)s: %(message)s"
+    log_level = logging.INFO
+    if args.verbose:
+        log_level = logging.DEBUG
+
+    logging.basicConfig(format=log_format, datefmt=log_date, level=log_level)
+
+    if args.config_path:
+        config_path = pathlib.Path(args.config_path).resolve()
+        logging.debug("Using config file: %s", config_path)
+        check_file(config_path)
+        solarroi.conf_file = config_path
+
+    forecasts = solcast.get_forecasts()
+
+    if len(forecasts) == 0:
+        die("No forecast records returned!")
+
+    if args.use_database:
+        logging.debug("Saving records to database...")
+        session_maker = connect_db()
+        with session_maker() as session:
+            for forecast in forecasts:
+                date = datetime.datetime.fromisoformat(forecast["period_end"])
+                pv_estimate = forecast["pv_estimate"]
+
+                forecast_record = session.query(Solcast).filter(
+                    Solcast.date == date
+                ).first()
+
+                if forecast_record:
+                    logging.debug("Updating existing record for %s", date)
+                    forecast_record.pv_estimate = pv_estimate
+                else:
+                    logging.debug("Creating new record for %s", )
+
+                    forecast_record = Solcast(
+                        date=date,
+                        pv_estimate=pv_estimate
+                    )
+
+                session.add(forecast_record)
+                session.commit()
+
+        logging.info("Forecast records saved to database")
+    else:
+        pprint.pprint(forecasts)
+
+
+def solar_roi_main():
     parser = argparse.ArgumentParser(
         description="Calculate ROI for your PV system using GivEnergy " +
                     "and Octopus Energy APIs",
@@ -27,10 +97,6 @@ def main():
     parser.add_argument(
         "-d", "--use-database", help="Save records to database",
         dest="use_database", action="store_true"
-    )
-    parser.add_argument(
-        "-f", "--forecast", help="Get solar forecast from Solcast",
-        dest="forecast", action="store_true"
     )
     parser.add_argument(
         "-s", "--start", help="Date to get consumption data from. Use now-X " +
@@ -90,12 +156,8 @@ def main():
     if end_date < start_date:
         die("End date is before start date")
 
-    forecasts = []
     results = {}
     roi = 0
-
-    if args.forecast:
-        forecasts = solcast.get_forecasts()
 
     logging.debug("Querying Octopus Energy API")
 
@@ -206,28 +268,5 @@ def main():
                     )
                 session.add(solar_roi)
                 session.commit()
-
-            if len(forecasts) > 0:
-                for forecast in forecasts:
-                    date = datetime.datetime.fromisoformat(forecast["period_end"])
-                    pv_estimate = forecast["pv_estimate"]
-
-                    forecast_record = session.query(Solcast).filter(
-                        Solcast.date == date
-                    ).first()
-
-                    if forecast_record:
-                        logging.debug("Updating existing record for %s", date)
-                        forecast_record.pv_estimate = pv_estimate
-                    else:
-                        logging.debug("Creating new record for %s", )
-
-                        forecast_record = Solcast(
-                            date=date,
-                            pv_estimate=pv_estimate
-                        )
-
-                    session.add(forecast_record)
-                    session.commit()
 
         logging.debug("Database update complete")
