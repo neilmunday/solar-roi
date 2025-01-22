@@ -69,7 +69,7 @@ def solar_forecast_main():
                     logging.debug("Updating existing record for %s", date)
                     forecast_record.pv_estimate = pv_estimate
                 else:
-                    logging.debug("Creating new record for %s", )
+                    logging.debug("Creating new record for %s", date)
 
                     forecast_record = Solcast(
                         date=date,
