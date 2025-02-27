@@ -100,9 +100,19 @@ def get_energy_cost_by_day(
         next_date_time = get_datetime_from_date(next_date)
         tariff_code = None
         cost = 0.0
+        agreements_total = len(meter.agreements)
         # get tariff for this day
-        for agreement in meter.agreements:
-            if current_date_iso >= agreement["valid_from"] and current_date_iso < agreement["valid_to"]:
+        for index, agreement in enumerate(meter.agreements):
+            if (
+                (
+                    current_date_iso >= agreement["valid_from"] and
+                    current_date_iso < agreement["valid_to"]
+                ) or (
+                    # hack for Ocotpus Energy bug where valid_to is wrong
+                    current_date_iso >= agreement["valid_from"] and
+                    index == agreements_total - 1
+                )
+            ):
                 tariff_code = agreement["tariff_code"]
                 parts = tariff_code.split("-")
                 product_code = "-".join(parts[2:-1])
