@@ -103,10 +103,13 @@ def get_energy_cost_by_day(
         agreements_total = len(meter.agreements)
         # get tariff for this day
         for index, agreement in enumerate(meter.agreements):
+            logging.debug("get_energy_cost_by_day: agreement = %s", agreement)
             if (
                 (
-                    current_date_iso >= agreement["valid_from"] and
-                    current_date_iso < agreement["valid_to"]
+                    current_date_iso >= agreement["valid_from"] and (
+                        agreement["valid_to"] is None
+                        or current_date_iso < agreement["valid_to"]
+                    )
                 ) or (
                     # hack for Ocotpus Energy bug where valid_to is wrong
                     current_date_iso >= agreement["valid_from"] and
