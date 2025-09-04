@@ -45,8 +45,8 @@ class EnergyType(Enum):
 
 
 def check_response(data: Dict[str, str]):
-    if "message" in data and data["message"] == "Too Many Attempts.":
-        die("Too many GivEnergy API requests!")
+    if "errors" in data:
+        die(data["message"])
 
 
 def get_api_key() -> str:
