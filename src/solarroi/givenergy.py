@@ -86,8 +86,11 @@ def get_energy_consumption_by_day(start_date: str, end_date: str):
     }
 
     response = requests.request('POST', url, headers=headers, json=params)
-    data = response.json()
 
+    if response.status_code != 200:
+        die(f"Unable to load {url}, error code: {response.status}")
+
+    data = response.json()
     check_response(data)
 
     results: Dict[str, Any] = {}
@@ -172,6 +175,10 @@ def load_page(url: str, page: int, api_key: str) -> Dict:
     }
 
     response = requests.request("GET", url, headers=headers, params=params)
+
+    if response.status_code != 200:
+        die(f"Unable to load {url}, error code: {response.status}")
+
     data = response.json()
     check_response(data)
     return data
