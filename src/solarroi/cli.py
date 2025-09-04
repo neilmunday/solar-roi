@@ -163,6 +163,9 @@ def solar_roi_main():
 
     import_meter, export_meter = octopus_energy.get_tariff_history()
 
+    logging.debug("Import meter: %s", import_meter)
+    logging.debug("Export meter: %s", export_meter)
+
     octopus_energy_import_cost = octopus_energy.get_energy_cost_by_day(
         import_meter,
         start_date,
