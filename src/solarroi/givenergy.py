@@ -88,7 +88,7 @@ def get_energy_consumption_by_day(start_date: str, end_date: str):
     response = requests.request('POST', url, headers=headers, json=params)
 
     if response.status_code != 200:
-        die(f"Unable to load {url}, error code: {response.status}")
+        die(f"Unable to load {url}, error code: {response.status_code}")
 
     data = response.json()
     check_response(data)
