@@ -70,6 +70,8 @@ def get_tariff_history() -> tuple[Optional[Meter], Optional[Meter]]:
 
 def load_url(url: str, params: Optional[Dict] = None) -> Any:
     logging.debug("load_url: %s", url)
+    if params is not None:
+        logging.debug("load_url: params = %s", params)
     response = requests.request(
         "GET", url, auth=(get_api_key(), ""), params=params
     )
@@ -143,7 +145,13 @@ def get_energy_cost_by_day(
                 }
             )
 
-            if prices_for_day["count"] < 1:
+            if (
+                ("count" in prices_for_day and prices_for_day["count"] < 1)
+                or (
+                    "detail" in prices_for_day
+                    and prices_for_day["detail"] == "Not found."
+                )
+            ):
                 logging.error("No prices for: %s", current_date)
             else:
                 for price_result in prices_for_day["results"]:
