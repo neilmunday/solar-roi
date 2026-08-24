@@ -44,6 +44,16 @@ def get_account() -> str:
 def get_api_key() -> str:
     return get_config_opion(CONFIG_SECTION, "api_key")
 
+def get_tariff_overrides() -> Dict[str, str]:
+    overrides_str = get_config_opion(CONFIG_SECTION, "tariff_overrides")
+    try:
+        overrides = eval(overrides_str)
+        if not isinstance(overrides, dict):
+            raise ValueError("tariff_overrides must be a dictionary")
+        return overrides
+    except Exception as e:
+        logging.error("Error parsing tariff_overrides: %s", e)
+        return {}
 
 def get_tariff_history() -> tuple[Optional[Meter], Optional[Meter]]:
     url = f"{BASE_URL}/accounts/{get_account()}/"
@@ -90,6 +100,8 @@ def get_energy_cost_by_day(
     consumption: Dict[str, float] = {}
     prices: Dict[str, List[TarrifPeriod]] = {}
 
+    export_tariff_overrides = get_tariff_overrides()
+
     current_date = start_date
     while current_date <= end_date:
         logging.debug("get_energy_cost_by_day: day = %s", current_date)
@@ -105,6 +117,7 @@ def get_energy_cost_by_day(
         agreements_total = len(meter.agreements)
         # get tariff for this day
         for index, agreement in enumerate(meter.agreements):
+
             logging.debug("get_energy_cost_by_day: agreement = %s", agreement)
             if (
                 (
@@ -118,9 +131,14 @@ def get_energy_cost_by_day(
                     index == agreements_total - 1
                 )
             ):
-                tariff_code = agreement["tariff_code"]
+                tariff_code: str = agreement["tariff_code"]
                 parts = tariff_code.split("-")
                 product_code = "-".join(parts[2:-1])
+
+                if product_code in export_tariff_overrides:
+                    tariff_code = tariff_code.replace(product_code, export_tariff_overrides[product_code])
+                    product_code = export_tariff_overrides[product_code]
+
                 logging.debug(
                     "get_energy_cost_by_day: %s = %s, %s",
                     current_date,
